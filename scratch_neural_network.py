@@ -19,6 +19,7 @@ import gzip
 from matplotlib import pyplot
 import math
 import numpy as np
+from IPython.core.debugger import set_trace
 
 DATA_PATH = Path("data")
 PATH = DATA_PATH / "mnist"
@@ -82,7 +83,7 @@ print(y_train.min(), y_train.max())
 #    (by multiplying with 1/sqrt(n)).
 
 
-weights = torch.randn(784, 10) / math.sqrt(784)
+weights = torch.randn(784, 10) / math.sqrt(784) # output layer 10 units
 weights.requires_grad_()
 bias = torch.zeros(10, requires_grad=True)
 
@@ -180,7 +181,6 @@ print(accuracy(preds, yb))
 #    Uncomment ``set_trace()`` below to try it out.
 #
 
-from IPython.core.debugger import set_trace
 
 lr = 0.5  # learning rate
 epochs = 2  # how many epochs to train for
