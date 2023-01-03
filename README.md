@@ -1,2 +1,2 @@
 # ScratchNeuralNetwork
-Neural Network without using Pytorch and only using NumPy
+Neural Network without using torch.nn, only use tensors 
