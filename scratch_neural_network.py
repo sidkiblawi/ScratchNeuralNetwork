@@ -83,7 +83,7 @@ print(y_train.min(), y_train.max())
 #    (by multiplying with 1/sqrt(n)).
 
 
-weights = torch.randn(784, 10) / math.sqrt(784) # output layer 10 units
+weights = torch.randn(784, 10) / math.sqrt(784)  # output layer 10 units
 weights.requires_grad_()
 bias = torch.zeros(10, requires_grad=True)
 
@@ -196,7 +196,7 @@ for epoch in range(epochs):
         loss = loss_func(pred, yb)
 
         loss.backward()
-        with torch.no_grad():
+        with torch.no_grad():  # we don't want weight updates added to graph
             weights -= weights.grad * lr
             bias -= bias.grad * lr
             weights.grad.zero_()
