@@ -129,20 +129,20 @@ counts = norm_logits.exp()
 counts_sum = counts.sum(1, keepdims=True)
 counts_sum_inv = counts_sum**-1 # if I use (1.0 / counts_sum) instead then I can't get backprop to be bit exact...
 probs = counts * counts_sum_inv
-preds = probs.log()
-loss = -preds[range(bs), yb].mean()
+logprobs = probs.log()
+loss = -logprobs[range(bs), yb].mean()
 
 for p in [weights, bias]:
     p.grad = None
 
-for t in [logits,logit_maxes,norm_logits,counts,counts_sum,counts_sum_inv,probs,preds]:
+for t in [logits,logit_maxes,norm_logits,counts,counts_sum,counts_sum_inv,probs,logprobs]:
     t.retain_grad()
 
 loss.backward()
 
-dpreds = torch.zeros_like(preds)
-dpreds[range(bs), yb] = -1.0/bs
-dprobs = (1.0 / probs) * dpreds
+dlogprobs = torch.zeros_like(logprobs)
+dlogprobs[range(bs), yb] = -1.0/bs
+dprobs = (1.0 / probs) * dlogprobs
 dcounts_sum_inv = (counts * dprobs).sum(1, keepdim=True)
 dcounts = counts_sum_inv * dprobs
 dcounts_sum = (-counts_sum ** -2) * dcounts_sum_inv
@@ -154,7 +154,7 @@ dlogits += torch.nn.functional.one_hot(logits.max(1).indices, num_classes=logits
 dweights = xb.T @ dlogits
 dbias = dlogits.sum(0)
 
-cmp('preds', dpreds, preds)
+cmp('logpreds', dlogprobs, logprobs)
 cmp('probs', dprobs, probs)
 cmp('counts_sum_inv', dcounts_sum_inv, counts_sum_inv)
 cmp('counts_sum', dcounts_sum, counts_sum)
@@ -184,7 +184,7 @@ loss_func = nll
 # after a backprop pass later.
 
 yb = y_train[0:bs]
-print(loss_func(preds, yb))
+print(loss_func(logprobs, yb))
 
 
 ###############################################################################
@@ -201,7 +201,7 @@ def accuracy(out, yb):
 # Let's check the accuracy of our random model, so we can see if our
 # accuracy improves as our loss improves.
 
-print(accuracy(preds, yb))
+print(accuracy(logprobs, yb))
 
 ###############################################################################
 # We can now run a training loop.  For each iteration, we will:
