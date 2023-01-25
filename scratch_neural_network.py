@@ -61,7 +61,7 @@ x_train, y_train, x_valid, y_valid = map(
 n, c = x_train.shape
 print(x_train, y_train)
 print(x_train.shape)
-print(y_train.min(), y_train.max())
+print(y_train.shape)
 
 ###############################################################################
 # Neural net from scratch (no torch.nn)
@@ -84,7 +84,7 @@ print(y_train.min(), y_train.max())
 
 
 weights = torch.randn(784, 10) / math.sqrt(784)  # output layer 10 units
-weights.requires_grad_()
+weights.requires_grad = True
 bias = torch.zeros(10, requires_grad=True)
 
 
@@ -99,23 +99,75 @@ bias = torch.zeros(10, requires_grad=True)
 # even create fast GPU or vectorized CPU code for your function
 # automatically.
 
+# utility function we will use later when comparing manual gradients to PyTorch gradients
+def cmp(s, dt, t):
+  ex = torch.all(dt == t.grad).item()
+  app = torch.allclose(dt, t.grad)
+  maxdiff = (dt - t.grad).abs().max().item()
+  print(f'{s:15s} | exact: {str(ex):5s} | approximate: {str(app):5s} | maxdiff: {maxdiff}')
+
 def log_softmax(x):
     return x - x.exp().sum(-1).log().unsqueeze(-1)
 
 
 def model(xb):
     return log_softmax(xb @ weights + bias)  # @ is matrix multiplication
-
+###############################################################################
+# Backprop  by hand
 
 # initiate variables
-
 bs = 64  # batch size
-
 xb = x_train[0:bs]  # a mini-batch from x
-preds = model(xb)  # predictions
-preds[0], preds.shape
-print(preds[0], preds.shape)
+yb = y_train[0:bs]
+print("batch shapes: ", xb.shape, yb.shape)
 
+linval = xb @ weights + bias # hidden layer pre-activation
+# Non-linearity
+logits = torch.tanh(linval) # hidden layer
+# cross entropy loss (same as F.cross_entropy(logits, Yb))
+logit_maxes = logits.max(1, keepdim=True).values
+norm_logits = logits - logit_maxes # subtract max for numerical stability
+counts = norm_logits.exp()
+counts_sum = counts.sum(1, keepdims=True)
+counts_sum_inv = counts_sum**-1 # if I use (1.0 / counts_sum) instead then I can't get backprop to be bit exact...
+probs = counts * counts_sum_inv
+preds = probs.log()
+loss = -preds[range(bs), yb].mean()
+
+for p in [weights, bias]:
+    p.grad = None
+
+for t in [linval,logits,logit_maxes,norm_logits,counts,counts_sum,counts_sum_inv,probs,preds]:
+    t.retain_grad()
+
+loss.backward()
+
+dpreds = torch.zeros_like(preds)
+dpreds[range(bs), yb] = -1.0/bs
+dprobs = (1.0 / probs) * dpreds
+dcounts_sum_inv = (counts * dprobs).sum(1, keepdim=True)
+dcounts = counts_sum_inv * dprobs
+dcounts_sum = (-counts_sum ** -2) * dcounts_sum_inv
+dcounts += torch.ones_like(counts) * dcounts_sum
+dnorm_logits = counts * dcounts
+dlogits = dnorm_logits.clone()
+dlogit_maxes = (-dnorm_logits).sum(1, keepdim=True)
+dlogits += torch.nn.functional.one_hot(logits.max(1).indices, num_classes=logits.shape[1]) * dlogit_maxes
+dlinval = (1.0 - logits**2) * dlogits
+dweights = xb.T @ dlinval
+dbias = dlinval.sum(0)
+
+cmp('preds', dpreds, preds)
+cmp('probs', dprobs, probs)
+cmp('counts_sum_inv', dcounts_sum_inv, counts_sum_inv)
+cmp('counts_sum', dcounts_sum, counts_sum)
+cmp('counts', dcounts, counts)
+cmp('norm_logits', dnorm_logits, norm_logits)
+cmp('logit_maxes', dlogit_maxes, logit_maxes)
+cmp('logits', dlogits, logits)
+cmp('linval', dlinval, linval)
+cmp('weights',dweights,weights)
+cmp('bias',dbias,bias)
 
 ###############################################################################
 # As you see, the ``preds`` tensor contains not only the tensor values, but also a
