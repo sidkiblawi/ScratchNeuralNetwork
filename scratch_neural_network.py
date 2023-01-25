@@ -121,9 +121,7 @@ xb = x_train[0:bs]  # a mini-batch from x
 yb = y_train[0:bs]
 print("batch shapes: ", xb.shape, yb.shape)
 
-linval = xb @ weights + bias # hidden layer pre-activation
-# Non-linearity
-logits = torch.tanh(linval) # hidden layer
+logits = xb @ weights + bias # hidden layer pre-activation
 # cross entropy loss (same as F.cross_entropy(logits, Yb))
 logit_maxes = logits.max(1, keepdim=True).values
 norm_logits = logits - logit_maxes # subtract max for numerical stability
@@ -137,7 +135,7 @@ loss = -preds[range(bs), yb].mean()
 for p in [weights, bias]:
     p.grad = None
 
-for t in [linval,logits,logit_maxes,norm_logits,counts,counts_sum,counts_sum_inv,probs,preds]:
+for t in [logits,logit_maxes,norm_logits,counts,counts_sum,counts_sum_inv,probs,preds]:
     t.retain_grad()
 
 loss.backward()
@@ -153,9 +151,8 @@ dnorm_logits = counts * dcounts
 dlogits = dnorm_logits.clone()
 dlogit_maxes = (-dnorm_logits).sum(1, keepdim=True)
 dlogits += torch.nn.functional.one_hot(logits.max(1).indices, num_classes=logits.shape[1]) * dlogit_maxes
-dlinval = (1.0 - logits**2) * dlogits
-dweights = xb.T @ dlinval
-dbias = dlinval.sum(0)
+dweights = xb.T @ dlogits
+dbias = dlogits.sum(0)
 
 cmp('preds', dpreds, preds)
 cmp('probs', dprobs, probs)
@@ -165,7 +162,6 @@ cmp('counts', dcounts, counts)
 cmp('norm_logits', dnorm_logits, norm_logits)
 cmp('logit_maxes', dlogit_maxes, logit_maxes)
 cmp('logits', dlogits, logits)
-cmp('linval', dlinval, linval)
 cmp('weights',dweights,weights)
 cmp('bias',dbias,bias)
 
